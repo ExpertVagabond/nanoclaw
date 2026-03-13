@@ -21,9 +21,22 @@ groups/global/*
 # Secrets
 *.keys.json
 .env
+.env.*
+
+# Credentials
+*.pem
+*.key
+credentials.json
+secrets.*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
 
 # OS
 .DS_Store
+Thumbs.db
 
 # IDE
 .idea/
