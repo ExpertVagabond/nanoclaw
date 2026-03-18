@@ -14,6 +14,18 @@ interface QueuedTask {
 const MAX_RETRIES = 5;
 const BASE_RETRY_MS = 5000;
 
+// Omega Architecture: TankBuffer metrics
+interface OmegaMetrics {
+  itemsIn: number;
+  itemsOut: number;
+  backpressureEvents: number;
+  peakDepth: number;
+  currentDepth: number;
+  skipFireHits: number;
+  skipFireMisses: number;
+  startedAt: number;
+}
+
 interface GroupState {
   active: boolean;
   idleWaiting: boolean;
@@ -34,6 +46,18 @@ export class GroupQueue {
   private processMessagesFn: ((groupJid: string) => Promise<boolean>) | null =
     null;
   private shuttingDown = false;
+
+  // Omega Architecture: TankBuffer metrics tracking
+  private omega: OmegaMetrics = {
+    itemsIn: 0,
+    itemsOut: 0,
+    backpressureEvents: 0,
+    peakDepth: 0,
+    currentDepth: 0,
+    skipFireHits: 0,
+    skipFireMisses: 0,
+    startedAt: Date.now(),
+  };
 
   private getGroup(groupJid: string): GroupState {
     let state = this.groups.get(groupJid);
@@ -61,6 +85,7 @@ export class GroupQueue {
 
   enqueueMessageCheck(groupJid: string): void {
     if (this.shuttingDown) return;
+    this.omega.itemsIn++;
 
     const state = this.getGroup(groupJid);
 
@@ -72,6 +97,7 @@ export class GroupQueue {
 
     if (this.activeCount >= MAX_CONCURRENT_CONTAINERS) {
       state.pendingMessages = true;
+      this.omega.backpressureEvents++;
       if (!this.waitingGroups.includes(groupJid)) {
         this.waitingGroups.push(groupJid);
       }
@@ -89,18 +115,22 @@ export class GroupQueue {
 
   enqueueTask(groupJid: string, taskId: string, fn: () => Promise<void>): void {
     if (this.shuttingDown) return;
+    this.omega.itemsIn++;
 
     const state = this.getGroup(groupJid);
 
-    // Prevent double-queuing: check both pending and currently-running task
+    // Omega: SkipFire — prevent duplicate work
     if (state.runningTaskId === taskId) {
-      logger.debug({ groupJid, taskId }, 'Task already running, skipping');
+      this.omega.skipFireHits++;
+      logger.debug({ groupJid, taskId }, 'Task already running, skipping (skip-fire)');
       return;
     }
     if (state.pendingTasks.some((t) => t.id === taskId)) {
-      logger.debug({ groupJid, taskId }, 'Task already queued, skipping');
+      this.omega.skipFireHits++;
+      logger.debug({ groupJid, taskId }, 'Task already queued, skipping (skip-fire)');
       return;
     }
+    this.omega.skipFireMisses++;
 
     if (state.active) {
       state.pendingTasks.push({ id: taskId, groupJid, fn });
@@ -193,6 +223,36 @@ export class GroupQueue {
     }
   }
 
+  /** Omega Architecture: get TankBuffer metrics */
+  omegaMetrics(): OmegaMetrics & { uptimeSeconds: number } {
+    this.omega.currentDepth = this.activeCount;
+    if (this.activeCount > this.omega.peakDepth) {
+      this.omega.peakDepth = this.activeCount;
+    }
+    return {
+      ...this.omega,
+      uptimeSeconds: Math.floor((Date.now() - this.omega.startedAt) / 1000),
+    };
+  }
+
+  /** Omega Architecture: log current metrics */
+  logOmegaMetrics(): void {
+    const m = this.omegaMetrics();
+    const totalSF = m.skipFireHits + m.skipFireMisses;
+    const skipRate = totalSF > 0 ? ((m.skipFireHits / totalSF) * 100).toFixed(1) : '0';
+    logger.info(
+      {
+        itemsIn: m.itemsIn,
+        itemsOut: m.itemsOut,
+        backpressure: m.backpressureEvents,
+        peakDepth: m.peakDepth,
+        skipFireRate: `${skipRate}%`,
+        uptimeSeconds: m.uptimeSeconds,
+      },
+      'Omega TankBuffer metrics',
+    );
+  }
+
   private async runForGroup(
     groupJid: string,
     reason: 'messages' | 'drain',
@@ -203,6 +263,9 @@ export class GroupQueue {
     state.isTaskContainer = false;
     state.pendingMessages = false;
     this.activeCount++;
+    if (this.activeCount > this.omega.peakDepth) {
+      this.omega.peakDepth = this.activeCount;
+    }
 
     logger.debug(
       { groupJid, reason, activeCount: this.activeCount },
@@ -227,6 +290,7 @@ export class GroupQueue {
       state.containerName = null;
       state.groupFolder = null;
       this.activeCount--;
+      this.omega.itemsOut++;
       this.drainGroup(groupJid);
     }
   }
@@ -256,6 +320,7 @@ export class GroupQueue {
       state.containerName = null;
       state.groupFolder = null;
       this.activeCount--;
+      this.omega.itemsOut++;
       this.drainGroup(groupJid);
     }
   }
