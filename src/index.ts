@@ -9,8 +9,13 @@ const SEC = Object.freeze({
 });
 
 function sanitizeError(err: unknown): string {
-  const msg = err instanceof Error ? (err.message || '').slice(0, 300) : 'An unexpected error occurred';
-  return msg.replace(/\/[^\s:]+/g, '[path]').replace(SEC.SECRET_PATTERNS, '$1=[REDACTED]');
+  const msg =
+    err instanceof Error
+      ? (err.message || '').slice(0, 300)
+      : 'An unexpected error occurred';
+  return msg
+    .replace(/\/[^\s:]+/g, '[path]')
+    .replace(SEC.SECRET_PATTERNS, '$1=[REDACTED]');
 }
 
 function sanitizeInput(str: string, maxLen = SEC.MAX_MESSAGE_LENGTH): string {
@@ -19,7 +24,8 @@ function sanitizeInput(str: string, maxLen = SEC.MAX_MESSAGE_LENGTH): string {
 }
 
 function validatePath(p: string): string {
-  if (typeof p !== 'string' || p.length > SEC.MAX_PATH_LENGTH) throw new Error('Invalid path length');
+  if (typeof p !== 'string' || p.length > SEC.MAX_PATH_LENGTH)
+    throw new Error('Invalid path length');
   if (p.includes('\0')) throw new Error('Null bytes in path');
   if (SEC.PATH_TRAVERSAL.test(p)) throw new Error('Path traversal detected');
   return p;
