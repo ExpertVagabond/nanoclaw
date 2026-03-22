@@ -122,12 +122,18 @@ export class GroupQueue {
     // Omega: SkipFire — prevent duplicate work
     if (state.runningTaskId === taskId) {
       this.omega.skipFireHits++;
-      logger.debug({ groupJid, taskId }, 'Task already running, skipping (skip-fire)');
+      logger.debug(
+        { groupJid, taskId },
+        'Task already running, skipping (skip-fire)',
+      );
       return;
     }
     if (state.pendingTasks.some((t) => t.id === taskId)) {
       this.omega.skipFireHits++;
-      logger.debug({ groupJid, taskId }, 'Task already queued, skipping (skip-fire)');
+      logger.debug(
+        { groupJid, taskId },
+        'Task already queued, skipping (skip-fire)',
+      );
       return;
     }
     this.omega.skipFireMisses++;
@@ -239,7 +245,8 @@ export class GroupQueue {
   logOmegaMetrics(): void {
     const m = this.omegaMetrics();
     const totalSF = m.skipFireHits + m.skipFireMisses;
-    const skipRate = totalSF > 0 ? ((m.skipFireHits / totalSF) * 100).toFixed(1) : '0';
+    const skipRate =
+      totalSF > 0 ? ((m.skipFireHits / totalSF) * 100).toFixed(1) : '0';
     logger.info(
       {
         itemsIn: m.itemsIn,
