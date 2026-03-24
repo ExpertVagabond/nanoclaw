@@ -77,8 +77,8 @@ vi.mock('child_process', async () => {
   return {
     ...actual,
     spawn: vi.fn(() => fakeProc),
-    exec: vi.fn(
-      (_cmd: string, _opts: unknown, cb?: (err: Error | null) => void) => {
+    execFile: vi.fn(
+      (_bin: string, _args: string[], _opts: unknown, cb?: (err: Error | null) => void) => {
         if (cb) cb(null);
         return new EventEmitter();
       },

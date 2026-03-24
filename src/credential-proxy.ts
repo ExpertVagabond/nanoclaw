@@ -10,12 +10,16 @@
  *             Proxy injects real OAuth token on that exchange request;
  *             subsequent requests carry the temp key which is valid as-is.
  */
+import { randomBytes } from 'crypto';
 import { createServer, Server } from 'http';
 import { request as httpsRequest } from 'https';
 import { request as httpRequest, RequestOptions } from 'http';
 
 import { readEnvFile } from './env.js';
 import { logger } from './logger.js';
+
+/** Bearer token containers must present to use the proxy. */
+export const PROXY_TOKEN = randomBytes(32).toString('hex');
 
 export type AuthMode = 'api-key' | 'oauth';
 
@@ -45,7 +49,22 @@ export function startCredentialProxy(
   const makeRequest = isHttps ? httpsRequest : httpRequest;
 
   return new Promise((resolve, reject) => {
+    if (host === '0.0.0.0') {
+      logger.warn(
+        'Credential proxy binding to 0.0.0.0 — accessible to ALL network interfaces. ' +
+        'Set CREDENTIAL_PROXY_HOST to restrict access.',
+      );
+    }
+
     const server = createServer((req, res) => {
+      // Authenticate: containers must present the proxy bearer token
+      const authHeader = req.headers['x-proxy-token'] as string | undefined;
+      if (authHeader !== PROXY_TOKEN) {
+        res.writeHead(401, { 'content-type': 'text/plain' });
+        res.end('Unauthorized: invalid or missing proxy token');
+        return;
+      }
+
       const chunks: Buffer[] = [];
       req.on('data', (c) => chunks.push(c));
       req.on('end', () => {
@@ -61,6 +80,8 @@ export function startCredentialProxy(
         delete headers['connection'];
         delete headers['keep-alive'];
         delete headers['transfer-encoding'];
+        // Strip proxy auth header — must not be forwarded upstream
+        delete headers['x-proxy-token'];
 
         if (authMode === 'api-key') {
           // API key mode: inject x-api-key on every request

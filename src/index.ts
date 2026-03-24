@@ -1,35 +1,7 @@
-// ── Security: Input Validation & Error Sanitization ──
-const SEC = Object.freeze({
-  MAX_MESSAGE_LENGTH: 50_000,
-  MAX_GROUP_NAME_LENGTH: 128,
-  MAX_PATH_LENGTH: 4096,
-  DANGEROUS_PATTERNS: /[<>"'`]/g,
-  PATH_TRAVERSAL: /\.\.\//g,
-  SECRET_PATTERNS: /(key|token|secret|password|credential)=\S+/gi,
-});
-
-function sanitizeError(err: unknown): string {
-  const msg =
-    err instanceof Error
-      ? (err.message || '').slice(0, 300)
-      : 'An unexpected error occurred';
-  return msg
-    .replace(/\/[^\s:]+/g, '[path]')
-    .replace(SEC.SECRET_PATTERNS, '$1=[REDACTED]');
-}
-
-function sanitizeInput(str: string, maxLen = SEC.MAX_MESSAGE_LENGTH): string {
-  if (typeof str !== 'string') return '';
-  return str.slice(0, maxLen).replace(SEC.DANGEROUS_PATTERNS, '');
-}
-
-function validatePath(p: string): string {
-  if (typeof p !== 'string' || p.length > SEC.MAX_PATH_LENGTH)
-    throw new Error('Invalid path length');
-  if (p.includes('\0')) throw new Error('Null bytes in path');
-  if (SEC.PATH_TRAVERSAL.test(p)) throw new Error('Path traversal detected');
-  return p;
-}
+// NOTE: Path validation is handled by group-folder.ts (resolveGroupFolderPath).
+// Input sanitization is not needed here — messages go to sandboxed containers.
+// Dead security stubs (sanitizeInput, validatePath, SEC) were removed in the
+// security review to avoid a false sense of coverage.
 
 import fs from 'fs';
 import path from 'path';

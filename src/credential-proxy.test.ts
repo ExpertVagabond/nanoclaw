@@ -11,7 +11,7 @@ vi.mock('./logger.js', () => ({
   logger: { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() },
 }));
 
-import { startCredentialProxy } from './credential-proxy.js';
+import { startCredentialProxy, PROXY_TOKEN } from './credential-proxy.js';
 
 function makeRequest(
   port: number,
@@ -78,6 +78,44 @@ describe('credential-proxy', () => {
     return (proxyServer.address() as AddressInfo).port;
   }
 
+  it('rejects requests without proxy token', async () => {
+    proxyPort = await startProxy({ ANTHROPIC_API_KEY: 'sk-ant-real-key' });
+
+    const res = await makeRequest(
+      proxyPort,
+      {
+        method: 'POST',
+        path: '/v1/messages',
+        headers: {
+          'content-type': 'application/json',
+        },
+      },
+      '{}',
+    );
+
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toContain('Unauthorized');
+  });
+
+  it('rejects requests with wrong proxy token', async () => {
+    proxyPort = await startProxy({ ANTHROPIC_API_KEY: 'sk-ant-real-key' });
+
+    const res = await makeRequest(
+      proxyPort,
+      {
+        method: 'POST',
+        path: '/v1/messages',
+        headers: {
+          'content-type': 'application/json',
+          'x-proxy-token': 'wrong-token',
+        },
+      },
+      '{}',
+    );
+
+    expect(res.statusCode).toBe(401);
+  });
+
   it('API-key mode injects x-api-key and strips placeholder', async () => {
     proxyPort = await startProxy({ ANTHROPIC_API_KEY: 'sk-ant-real-key' });
 
@@ -89,12 +127,15 @@ describe('credential-proxy', () => {
         headers: {
           'content-type': 'application/json',
           'x-api-key': 'placeholder',
+          'x-proxy-token': PROXY_TOKEN,
         },
       },
       '{}',
     );
 
     expect(lastUpstreamHeaders['x-api-key']).toBe('sk-ant-real-key');
+    // Proxy token must not be forwarded upstream
+    expect(lastUpstreamHeaders['x-proxy-token']).toBeUndefined();
   });
 
   it('OAuth mode replaces Authorization when container sends one', async () => {
@@ -110,6 +151,7 @@ describe('credential-proxy', () => {
         headers: {
           'content-type': 'application/json',
           authorization: 'Bearer placeholder',
+          'x-proxy-token': PROXY_TOKEN,
         },
       },
       '{}',
@@ -134,6 +176,7 @@ describe('credential-proxy', () => {
         headers: {
           'content-type': 'application/json',
           'x-api-key': 'temp-key-from-exchange',
+          'x-proxy-token': PROXY_TOKEN,
         },
       },
       '{}',
@@ -156,6 +199,7 @@ describe('credential-proxy', () => {
           connection: 'keep-alive',
           'keep-alive': 'timeout=5',
           'transfer-encoding': 'chunked',
+          'x-proxy-token': PROXY_TOKEN,
         },
       },
       '{}',
@@ -181,7 +225,10 @@ describe('credential-proxy', () => {
       {
         method: 'POST',
         path: '/v1/messages',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          'x-proxy-token': PROXY_TOKEN,
+        },
       },
       '{}',
     );
