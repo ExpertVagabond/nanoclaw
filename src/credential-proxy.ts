@@ -52,7 +52,7 @@ export function startCredentialProxy(
     if (host === '0.0.0.0') {
       logger.warn(
         'Credential proxy binding to 0.0.0.0 — accessible to ALL network interfaces. ' +
-        'Set CREDENTIAL_PROXY_HOST to restrict access.',
+          'Set CREDENTIAL_PROXY_HOST to restrict access.',
       );
     }
 
