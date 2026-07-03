@@ -1,3 +1,5 @@
+> **Fork notice:** This is ExpertVagabond's fork of [nanocoai/nanoclaw](https://github.com/nanocoai/nanoclaw). Changes on top of upstream are security hardening — shell-injection fix, auth proxy, cache allowlist, stateful-regex fix, entry-file hardening, and GroupQueue/TankBuffer metrics. All product branding, docs, nanoclaw.dev, and the Discord below belong to the upstream project.
+
 <p align="center">
   <img src="assets/nanoclaw-logo.png" alt="NanoClaw" width="400">
 </p>
